@@ -30,16 +30,13 @@ cologne: { ll:[50.9375, 6.9603], name:'Cologne', type:'Field site', note:'…' }
 
 ---
 
-## Embed it in the religene.eu website (WordPress)
+## Embed it in the religene.eu website
 
-You first need a public URL. Easiest free option: drag this folder onto
-[netlify.com/drop](https://app.netlify.com/drop) → you get a link like `https://religene-map.netlify.app`.
-(Or enable GitHub Pages on a public repo.)
+Essenially, use the URL to iframe the map onto the website 
 
-Then in WordPress, edit the page → add a **Custom HTML** block → paste:
 
 ```html
-<iframe src="https://YOUR-URL-HERE" width="100%" height="640" style="border:0;border-radius:8px"
+<iframe src="https://effortless-moonbeam-1e400a.netlify.app/" width="100%" height="640" style="border:0;border-radius:8px"
         title="RELI-GENE transnational map" loading="lazy"></iframe>
 ```
 
@@ -52,7 +49,3 @@ Adjust `height` to taste. That's it — the live, clickable map appears inside t
 **Live & interactive (recommended):** with the page hosted (see above):
 **Insert → Get Add-ins → search "Web Viewer" → Insert →** paste your URL.
 The animated, clickable map runs right inside the slide.
-
-**Static fallback (no internet needed):** open `index.html` in your browser, frame the view you
-want, and screenshot it into the slide. For the moving flow lines, record a short clip
-(`Cmd+Shift+5` on Mac / Xbox Game Bar `Win+G` on Windows) and insert it as a looping video.
