@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RELI-GENE — Transnational Field Sites & Kinship Networks</title>
+
+<!-- Leaflet (open source, no API key) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+  :root{
+    --ink:#1f2530;
+    --muted:#5c6677;
+    --panel:#ffffff;
+    --line:#e2e6ec;
+    /* community palette */
+    --c-site:#264653;
+    --c-iraq:#e07a3f;
+    --c-syria:#c0392b;
+    --c-haredi:#5b6cc4;
+    --c-emirati:#2a9d8f;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:"Helvetica Neue",Arial,system-ui,sans-serif;color:var(--ink)}
+  #map{position:absolute;inset:0;background:#f4f6f8}
+
+  /* ---- Title ---- */
+  .title{
+    position:absolute;top:14px;left:50%;transform:translateX(-50%);
+    z-index:1000;background:rgba(255,255,255,.92);backdrop-filter:blur(4px);
+    border:1px solid var(--line);border-radius:10px;padding:8px 16px;
+    box-shadow:0 2px 12px rgba(0,0,0,.08);text-align:center;max-width:92vw;
+  }
+  .title h1{margin:0;font-size:15px;letter-spacing:.02em}
+  .title p{margin:2px 0 0;font-size:11.5px;color:var(--muted)}
+
+  /* ---- Legend / control panel ---- */
+  .panel{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    box-shadow:0 2px 12px rgba(0,0,0,.10);padding:12px 14px;font-size:12.5px;width:230px;
+  }
+  .panel h2{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  .row{display:flex;align-items:center;gap:9px;margin:6px 0;cursor:pointer;user-select:none}
+  .row input{margin:0;cursor:pointer}
+  .swatch{width:26px;height:0;border-top-width:3px;border-top-style:solid;flex:0 0 auto;border-radius:2px}
+  .dot{width:13px;height:13px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--c-site);background:var(--c-site);flex:0 0 auto}
+  .lbl{line-height:1.25}
+  .lbl small{display:block;color:var(--muted);font-size:10.5px}
+  .divider{height:1px;background:var(--line);margin:10px 0}
+  .hint{font-size:10.5px;color:var(--muted);margin-top:8px;line-height:1.35}
+
+  /* ---- Map labels & markers ---- */
+  .site-label{
+    background:rgba(255,255,255,.85);border:1px solid var(--line);border-radius:5px;
+    padding:1px 6px;font-size:11px;font-weight:600;white-space:nowrap;color:var(--ink);
+    box-shadow:0 1px 3px rgba(0,0,0,.08);
+  }
+  .leaflet-popup-content{font-size:12.5px;line-height:1.45}
+  .leaflet-popup-content b{font-size:13px}
+  .tag{display:inline-block;font-size:10px;font-weight:700;color:#fff;border-radius:3px;padding:1px 6px;margin-top:4px}
+
+  @media(max-width:640px){
+    .panel{width:190px;font-size:11.5px}
+    .title h1{font-size:13px}
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="title">
+  <h1>RELI-GENE · Transnational Field Sites &amp; Kinship Networks</h1>
+  <p>Governing Health, Family &amp; Religion — SOAS, University of London (ERC, 2025–2030)</p>
+</div>
+
+<script>
+/* ============================================================
+   1. BASE MAP  (CARTO Positron, no country labels — we add our own)
+   ============================================================ */
+const map = L.map('map', { zoomControl:true, scrollWheelZoom:true, minZoom:2 })
+  .setView([42, 18], 3.2);
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+  attribution:'&copy; OpenStreetMap, &copy; CARTO',
+  subdomains:'abcd', maxZoom:19
+}).addTo(map);
+
+/* ============================================================
+   2. DATA
+   Field sites = circle markers.  Origin nodes (Iraq/Syria) are
+   link endpoints, shown only when their link layer is on.
+   ============================================================ */
+const PLACES = {
+  jerusalem:{ ll:[31.7683,35.2137], name:'Jerusalem', note:'Palestinian & Ultra-Orthodox Jewish communities' },
+  germany:  { ll:[52.5200,13.4050], name:'Germany',   note:'Diaspora field site (Berlin anchor)' },
+  sweden:   { ll:[59.3293,18.0686], name:'Sweden',    note:'Diaspora field site (Stockholm anchor)' },
+  uae:      { ll:[24.4539,54.3773], name:'UAE',        note:'Emirati communities (Abu Dhabi anchor)' },
+  london:   { ll:[51.5074,-0.1278], name:'London',     note:'UK — coordinating site & network node' },
+  newyork:  { ll:[40.7128,-74.0060],name:'New York',   note:'Ultra-Orthodox Jewish network node' },
+  // origin nodes (appear with links)
+  iraq:     { ll:[33.3152,44.3661], name:'Iraq',   origin:true },
+  syria:    { ll:[33.5138,36.2765], name:'Syria',  origin:true },
+};
+
+// Which places are "field sites" (always-on markers layer)
+const SITE_KEYS = ['jerusalem','germany','sweden','uae','london','newyork'];
+
+// Transnational link groups
+const LINKS = [
+  { key:'iraq',    name:'Iraqi diaspora',                  color:'var(--c-iraq)',    raw:'#e07a3f',
+    path:['iraq','germany','sweden'],
+    desc:'Iraqi minority families across Germany &amp; Sweden' },
+  { key:'syria',   name:'Syrian diaspora',                 color:'var(--c-syria)',   raw:'#c0392b',
+    path:['syria','germany','sweden'],
+    desc:'Syrian minority families across Germany &amp; Sweden' },
+  { key:'haredi',  name:'Jerusalem · London · New York',   color:'var(--c-haredi)',  raw:'#5b6cc4',
+    path:['jerusalem','london','newyork'],
+    desc:'Ultra-Orthodox Jewish transnational kinship networks' },
+  { key:'emirati', name:'UAE · UK',                        color:'var(--c-emirati)', raw:'#2a9d8f',
+    path:['uae','london'],
+    desc:'Emirati transnational links to the UK' },
+];
+
+/* ============================================================
+   3. CURVED ARCS
+   Leaflet polylines are straight; we sample a quadratic Bézier
+   with an offset control point to get a gentle "flow" curve.
+   ============================================================ */
+function curve(a, b, bend=0.22, steps=48){
+  const [lat1,lng1]=a, [lat2,lng2]=b;
+  const mx=(lat1+lat2)/2, my=(lng1+lng2)/2;
+  // perpendicular offset for the control point
+  const dx=lat2-lat1, dy=lng2-lng1;
+  const cx=mx - dy*bend, cy=my + dx*bend;
+  const pts=[];
+  for(let i=0;i<=steps;i++){
+    const t=i/steps, u=1-t;
+    pts.push([ u*u*lat1 + 2*u*t*cx + t*t*lat2,
+               u*u*lng1 + 2*u*t*cy + t*t*lng2 ]);
+  }
+  return pts;
+}
+
+/* ============================================================
+   4. LAYERS
+   ============================================================ */
+// --- field-site markers ---
+const siteLayer = L.layerGroup();
+SITE_KEYS.forEach(k=>{
+  const p=PLACES[k];
+  L.circleMarker(p.ll,{radius:7,color:'#fff',weight:2,fillColor:'#264653',fillOpacity:1})
+   .bindPopup(`<b>${p.name}</b><br>${p.note}`)
+   .addTo(siteLayer);
+  L.marker(p.ll,{icon:L.divIcon({className:'',html:`<div class="site-label">${p.name}</div>`,iconAnchor:[-10,10]}),
+                 interactive:false}).addTo(siteLayer);
+});
+siteLayer.addTo(map);
+
+// --- one layerGroup per link group ---
+const linkLayers = {};
+LINKS.forEach(g=>{
+  const lg=L.layerGroup();
+  for(let i=0;i<g.path.length-1;i++){
+    const a=PLACES[g.path[i]], b=PLACES[g.path[i+1]];
+    L.polyline(curve(a.ll,b.ll),{color:g.raw,weight:3,opacity:.85})
+      .bindPopup(`<b>${g.name}</b><br>${g.desc}<br><span class="tag" style="background:${g.raw}">${a.name} → ${b.name}</span>`)
+      .addTo(lg);
+  }
+  // origin-node dots (Iraq, Syria) so links have a visible start
+  g.path.forEach(k=>{
+    const p=PLACES[k];
+    if(p.origin){
+      L.circleMarker(p.ll,{radius:6,color:'#fff',weight:2,fillColor:g.raw,fillOpacity:1})
+        .bindPopup(`<b>${p.name}</b><br>Origin of ${g.name.toLowerCase()}`)
+        .addTo(lg);
+      L.marker(p.ll,{icon:L.divIcon({className:'',html:`<div class="site-label">${p.name}</div>`,iconAnchor:[-10,10]}),
+                     interactive:false}).addTo(lg);
+    }
+  });
+  lg.addTo(map);
+  linkLayers[g.key]=lg;
+});
+
+/* ============================================================
+   5. LEGEND + TOGGLE PANEL  (custom Leaflet control)
+   ============================================================ */
+const ctrl = L.control({position:'bottomright'});
+ctrl.onAdd = function(){
+  const d=L.DomUtil.create('div','panel');
+  L.DomEvent.disableClickPropagation(d);
+  d.innerHTML = `
+    <h2>Field sites</h2>
+    <label class="row">
+      <input type="checkbox" id="t-sites" checked>
+      <span class="dot"></span>
+      <span class="lbl">Case-study locations<small>Jerusalem · Germany · Sweden · UAE · London · New York</small></span>
+    </label>
+    <div class="divider"></div>
+    <h2>Transnational links</h2>
+    ${LINKS.map(g=>`
+      <label class="row">
+        <input type="checkbox" class="t-link" data-key="${g.key}" checked>
+        <span class="swatch" style="border-top-color:${g.raw}"></span>
+        <span class="lbl">${g.name}<small>${g.desc.replace(/&amp;/g,'&')}</small></span>
+      </label>`).join('')}
+    <div class="hint">Toggle layers to compare networks. Click any point or line for detail.</div>
+  `;
+  return d;
+};
+ctrl.addTo(map);
+
+// wire up toggles
+document.getElementById('t-sites').addEventListener('change',e=>{
+  e.target.checked ? map.addLayer(siteLayer) : map.removeLayer(siteLayer);
+});
+document.querySelectorAll('.t-link').forEach(cb=>{
+  cb.addEventListener('change',e=>{
+    const lg=linkLayers[e.target.dataset.key];
+    e.target.checked ? map.addLayer(lg) : map.removeLayer(lg);
+  });
+});
+</script>
+</body>
+</html>
