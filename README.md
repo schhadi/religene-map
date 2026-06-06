@@ -5,7 +5,7 @@ transnational diaspora/kinship networks. Everything lives in one file: **`index.
 (no build step, no API key, no account).
 
 - **Field sites:** Jerusalem · Germany · Sweden · UAE · London · New York
-- **Migration flows (arrowheads):** Iraqi & Syrian diaspora → Germany & Sweden
+- **Migration flows (arrowheads):** Palestinian, Iraqi & Syrian diaspora → Germany & Sweden
 - **Kinship networks (dotted, bidirectional):** Jerusalem · London · New York · and UAE · UK
 
 ---

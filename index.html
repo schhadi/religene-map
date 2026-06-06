@@ -116,18 +116,21 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png
    DATA
    ============================================================ */
 const PLACES = {
-  jerusalem:{ll:[31.7683,35.2137],name:'Jerusalem',type:'Field site',note:'Palestinian and Ultra-Orthodox Jewish (Haredi) communities — a core comparative site for the project.'},
-  germany:  {ll:[52.5200,13.4050],name:'Germany',  type:'Field site',note:'European host context for Iraqi and Syrian diaspora families (Berlin anchor).'},
-  sweden:   {ll:[59.3293,18.0686],name:'Sweden',   type:'Field site',note:'European host context for Iraqi and Syrian diaspora families (Stockholm anchor).'},
-  uae:      {ll:[24.4539,54.3773],name:'UAE',       type:'Field site',note:'Emirati communities and Gulf genetic-health governance (Abu Dhabi anchor).'},
+  jerusalem:{ll:[31.7683,35.2137],name:'Jerusalem',type:'Field site',note:'Major hub for Palestinian communities of diverse ethno-religious backgrounds and for Haredi networks of kinship, reproductive screening and fertility treatment.'},
+  germany:  {ll:[52.5200,13.4050],name:'Germany',  type:'Field site',note:'A major European hub for Palestinian, Syrian and Iraqi diaspora families — shaped by migration, asylum and family-reunification pathways, with enduring cross-border kinship ties.'},
+  sweden:   {ll:[59.3293,18.0686],name:'Sweden',   type:'Field site',note:'A major European hub for Palestinian, Syrian and Iraqi diaspora communities — shaped by migration, asylum and family-reunification pathways, with enduring cross-border kinship ties.'},
+  uae:      {ll:[24.4539,54.3773],name:'UAE',       type:'Field site',note:'Major hub for premarital genetic screening and fertility treatment in the Gulf.'},
   london:   {ll:[51.5074,-0.1278],name:'London',    type:'Field site',note:'Coordinating site (SOAS) and a node in both Haredi and Emirati transnational networks.'},
-  newyork:  {ll:[40.7128,-74.0060],name:'New York', type:'Field site',note:'Major node in Ultra-Orthodox Jewish transnational kinship networks.'},
-  iraq:     {ll:[33.3152,44.3661],name:'Iraq',      type:'Origin',    note:'Origin context for Iraqi minority families now living across Germany and Sweden.'},
-  syria:    {ll:[33.5138,36.2765],name:'Syria',     type:'Origin',    note:'Origin context for Syrian minority families now living across Germany and Sweden.'},
+  newyork:  {ll:[40.7128,-74.0060],name:'New York', type:'Field site',note:'A major hub in transnational Haredi kinship networks.'},
+  iraq:     {ll:[33.3152,44.3661],name:'Iraq',      type:'Origin',    note:'War, persecution and forced displacement of Iraqis from diverse ethno-religious backgrounds.'},
+  syria:    {ll:[33.5138,36.2765],name:'Syria',     type:'Origin',    note:'War, persecution and forced displacement of Syrians from diverse ethno-religious backgrounds.'},
 };
 const SITE_KEYS = ['jerusalem','germany','sweden','uae','london','newyork'];
 
 const GROUPS = [
+  {key:'palestine', label:'Palestinian diaspora', raw:'#73508c', directed:true,
+   edges:[['jerusalem','germany'],['jerusalem','sweden']],
+   desc:'Palestinian families who moved to Germany and Sweden, and the cross-border kinship ties they maintain.'},
   {key:'iraq',  label:'Iraqi diaspora',  raw:'#d8613c', directed:true, origin:'iraq',
    edges:[['iraq','germany'],['iraq','sweden']],
    desc:'Iraqi minority families who migrated to Germany and Sweden, and the cross-border kinship ties they maintain.'},
@@ -136,10 +139,10 @@ const GROUPS = [
    desc:'Syrian minority families who migrated to Germany and Sweden, and the cross-border kinship ties they maintain.'},
   {key:'haredi',label:'Jerusalem · London · New York', raw:'#3f6e78', directed:false,
    edges:[['jerusalem','london'],['london','newyork'],['jerusalem','newyork']],
-   desc:'Ultra-Orthodox Jewish (Haredi) transnational kinship networks linking Jerusalem, London and New York. Ties run in both directions.'},
+   desc:'Key hubs connecting transnational Haredi kinship, marriage and communal networks. Ties run in both directions.'},
   {key:'emirati',label:'UAE · UK', raw:'#6b8e4e', directed:false,
    edges:[['uae','london']],
-   desc:'Emirati transnational links between the UAE and the UK. Ties run in both directions.'},
+   desc:'Bidirectional transnational links of Emiratis between the UAE and the UK.'},
 ];
 
 /* ============================================================
