@@ -84,10 +84,24 @@
   .rg-tip .tx{display:block;font-size:12px;line-height:1.5;color:#2a2a2a}
   .rg-tip .dir{display:inline-block;margin-top:8px;font-size:10px;font-weight:700;color:#fff;border-radius:3px;padding:2px 8px}
 
+  /* ---------- FOCUS / ISOLATE MODE ---------- */
+  .leaflet-pane path{transition:opacity .45s ease, fill-opacity .45s ease, stroke-width .25s ease}
+  .leaflet-marker-icon{transition:opacity .4s ease}
+  .rg-dim{opacity:.10 !important}                                    /* faded context        */
+  .rg-hide{opacity:0 !important;pointer-events:none}                 /* hidden, non-relevant */
+  .rg-focus{fill-opacity:.30 !important;stroke-width:2.6 !important} /* the isolated country */
+  #showall{
+    position:absolute;left:14px;bottom:24px;z-index:1000;display:none;align-items:center;gap:7px;
+    background:var(--brand);color:#fff;border:0;border-radius:8px;padding:9px 15px;
+    font:600 12.5px "Inter",system-ui,sans-serif;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,.20)
+  }
+  #showall:hover{filter:brightness(1.07)}
+
   /* ---------- animated flow ---------- */
   path.flow{animation:flowmove 1.05s linear infinite}
   @keyframes flowmove{to{stroke-dashoffset:-16}}
-  @media (prefers-reduced-motion: reduce){ path.flow{animation:none} }
+  @media (prefers-reduced-motion: reduce){ path.flow{animation:none}
+    .leaflet-pane path,.leaflet-marker-icon{transition:none} }
 
   @media(max-width:720px){
     #brand{max-width:55vw;padding:8px 11px}
@@ -103,6 +117,7 @@
 </head>
 <body>
   <div id="map"></div>
+  <button id="showall" type="button">&#8634; Show all sites</button>
   <div id="brand">
     <p class="name"><span class="reli">RELI</span>-GENE</p>
     <p class="tag">Governing Health, Family &amp; Religion: the biopolitics of genetic counselling and religious family formations · SOAS, University of London · ERC 2025–2030</p>
@@ -208,6 +223,7 @@ function countryOutline(k,color,isSite){
       layer.bindTooltip(placeTip(k),{...TIP,direction:'top'});
       layer.on('mouseover',()=>layer.setStyle({weight:2.4,fillOpacity:isSite?.26:.32}));
       layer.on('mouseout', ()=>layer.setStyle(base));
+      layer.on('click',   ()=>{ eatClick(); focusPlace(k); });
     }
   });
 }
@@ -221,12 +237,17 @@ function labelMarker(p){
 /* ============================================================
    FIELD-SITE COUNTRIES (always-on layer)
    ============================================================ */
+/* registries used by the click-to-isolate focus mode */
+const DEFAULT_CENTER=[43,10], DEFAULT_ZOOM=3.3;
+const outlineByKey={}, labelByKey={}, edges=[], groupEnabled={};
+let currentFocus=null;
+
 const SITE_COLORS={ jerusalem:getCss('--c-jerusalem'), uae:getCss('--c-emirati') };
 const siteLayer=L.layerGroup();
 SITE_KEYS.forEach(k=>{
   const o=countryOutline(k, SITE_COLORS[k]||getCss('--c-site'), true);
-  if(o) o.addTo(siteLayer);
-  labelMarker(PLACES[k]).addTo(siteLayer);
+  if(o){ o.addTo(siteLayer); outlineByKey[k]=o; }
+  const lbl=labelMarker(PLACES[k]); lbl.addTo(siteLayer); labelByKey[k]=lbl;
 });
 siteLayer.addTo(map);
 
@@ -235,28 +256,28 @@ siteLayer.addTo(map);
    ============================================================ */
 const groupLayers={};
 GROUPS.forEach(g=>{
+  groupEnabled[g.key]=true;
   const lg=L.layerGroup();
   // origin country outline first, so flow lines render on top of it
   if(g.origin){
     const o=countryOutline(g.origin,g.raw,false);
-    if(o) o.addTo(lg);
-    labelMarker(PLACES[g.origin]).addTo(lg);
+    if(o){ o.addTo(lg); outlineByKey[g.origin]=o; }
+    const lbl=labelMarker(PLACES[g.origin]); lbl.addTo(lg); labelByKey[g.origin]=lbl;
   }
   g.edges.forEach(([fromK,toK])=>{
     const pts=curve(PLACES[fromK].ll,PLACES[toK].ll);
     const tip=edgeTip(g,fromK,toK);
     // faint base (wide, easy hover target)
-    L.polyline(pts,{color:g.raw,weight:6,opacity:.20})
-      .bindTooltip(tip,TIP).addTo(lg);
+    const baseLine=L.polyline(pts,{color:g.raw,weight:6,opacity:.20})
+      .bindTooltip(tip,TIP).on('click',eatClick).addTo(lg);
     // animated flowing dots
-    L.polyline(pts,{color:g.raw,weight:3,opacity:.95,lineCap:'round',
+    const flowLine=L.polyline(pts,{color:g.raw,weight:3,opacity:.95,lineCap:'round',
       dashArray:'2 14',className:'flow'})
-      .bindTooltip(tip,TIP).addTo(lg);
-    // direction arrowhead (migration flows only)
-    if(g.directed){
-      L.polylineDecorator(pts,{patterns:[{offset:'100%',repeat:0,
-        symbol:L.Symbol.arrowHead({pixelSize:11,polygon:true,pathOptions:{stroke:false,fillOpacity:1,color:g.raw}})}]}).addTo(lg);
-    }
+      .bindTooltip(tip,TIP).on('click',eatClick).addTo(lg);
+    // direction arrowhead (migration flows only) — added to the map by applyFx()
+    const deco = g.directed ? L.polylineDecorator(pts,{patterns:[{offset:'100%',repeat:0,
+        symbol:L.Symbol.arrowHead({pixelSize:11,polygon:true,pathOptions:{stroke:false,fillOpacity:1,color:g.raw}})}]}) : null;
+    edges.push({from:fromK,to:toK,group:g.key,lines:[baseLine,flowLine],deco});
   });
   lg.addTo(map);
   groupLayers[g.key]=lg;
@@ -278,19 +299,93 @@ legend.onAdd = function(){
       `<span class="swatch${g.directed?'':' dashed'}" style="border-top-color:${g.raw}"></span>`+
       `<span class="lbl">${g.label}<small>${g.directed?'Migration flow (directional)':'Kinship network (bidirectional)'}</small></span>`+
     `</label>`).join('')+
-    `<p class="hint">Hover any country or flow line for details. Arrowheads show migration direction; dotted lines are bidirectional kinship ties.</p>`;
+    `<p class="hint"><b>Hover</b> for details · <b>click a country</b> to isolate its connections. Arrowheads show migration direction; dotted lines are bidirectional kinship ties.</p>`;
   L.DomEvent.disableClickPropagation(div);
   L.DomEvent.disableScrollPropagation(div);
   return div;
 };
 legend.addTo(map);
 
-document.getElementById('t-sites').addEventListener('change',e=>
-  e.target.checked?map.addLayer(siteLayer):map.removeLayer(siteLayer));
+document.getElementById('t-sites').addEventListener('change',e=>{
+  e.target.checked?map.addLayer(siteLayer):map.removeLayer(siteLayer);
+  applyFx();
+});
 document.querySelectorAll('.t-link').forEach(cb=>cb.addEventListener('change',e=>{
-  const lg=groupLayers[e.target.dataset.key];
-  e.target.checked?map.addLayer(lg):map.removeLayer(lg);
+  const key=e.target.dataset.key;
+  groupEnabled[key]=e.target.checked;
+  e.target.checked?map.addLayer(groupLayers[key]):map.removeLayer(groupLayers[key]);
+  applyFx();
 }));
+
+/* ============================================================
+   CLICK-TO-ISOLATE FOCUS MODE
+   Click a country -> show only it and the flows touching it,
+   fade the rest, and fly to fit. Click empty map / button /
+   Esc / the same country again -> show everything.
+   ============================================================ */
+const FX=['rg-dim','rg-hide','rg-focus'];
+function paintEl(el,cls){ if(!el) return; el.classList.remove(...FX); if(cls) el.classList.add(cls); }
+function paint(layer,cls){
+  if(!layer) return;
+  if(layer.getElement){ paintEl(layer.getElement(),cls); }
+  if(layer.eachLayer) layer.eachLayer(s=>paint(s,cls));
+}
+
+function applyFx(){
+  const k=currentFocus;
+  let relEdges=[]; const relPlaces=new Set();
+  if(k){
+    relEdges=edges.filter(e=>e.from===k||e.to===k);
+    relPlaces.add(k); relEdges.forEach(e=>{relPlaces.add(e.from);relPlaces.add(e.to);});
+  }
+  // country outlines
+  for(const key in outlineByKey)
+    paint(outlineByKey[key], !k ? '' : (key===k ? 'rg-focus' : (relPlaces.has(key)?'':'rg-dim')));
+  // place labels
+  for(const key in labelByKey)
+    paintEl(labelByKey[key].getElement(), (k && !relPlaces.has(key)) ? 'rg-dim' : '');
+  // flow lines (CSS fade) + arrowheads (add/remove)
+  edges.forEach(e=>{
+    const on = !k || relEdges.indexOf(e)>=0;
+    e.lines.forEach(p=>paint(p, on?'':'rg-hide'));
+    if(e.deco){
+      const want=on && groupEnabled[e.group], isOn=map.hasLayer(e.deco);
+      if(want&&!isOn) e.deco.addTo(map); else if(!want&&isOn) map.removeLayer(e.deco);
+    }
+  });
+}
+
+const showAllBtn=document.getElementById('showall');
+function focusPlace(k){
+  if(!outlineByKey[k]) return;
+  currentFocus = (currentFocus===k) ? null : k;
+  applyFx();
+  if(currentFocus){
+    const rel=edges.filter(e=>e.from===k||e.to===k);
+    const places=new Set([k]); rel.forEach(e=>{places.add(e.from);places.add(e.to);});
+    const b=L.latLngBounds([]);
+    places.forEach(key=>{ const o=outlineByKey[key];
+      if(o&&map.hasLayer(o)){ try{ b.extend(o.getBounds()); }catch(_){} }
+      b.extend(PLACES[key].ll); });
+    rel.forEach(e=>{ try{ b.extend(e.lines[0].getBounds()); }catch(_){} });
+    if(b.isValid()) map.flyToBounds(b,{paddingTopLeft:[40,135],paddingBottomRight:[40,55],duration:.9,maxZoom:6});
+    showAllBtn.style.display='inline-flex';
+  } else {
+    map.flyTo(DEFAULT_CENTER,DEFAULT_ZOOM,{duration:.8});
+    showAllBtn.style.display='none';
+  }
+}
+function clearFocus(){ if(currentFocus!==null) focusPlace(currentFocus); }
+
+/* swallow clicks on lines/countries so they don't bubble to the map's
+   "click empty space = clear" handler */
+let _eat=false;
+function eatClick(){ _eat=true; setTimeout(()=>_eat=false,0); }
+map.on('click',()=>{ if(!_eat) clearFocus(); });
+showAllBtn.addEventListener('click',clearFocus);
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') clearFocus(); });
+
+applyFx();   // initial paint: adds the arrowheads for enabled groups
 </script>
 </body>
 </html>
