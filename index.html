@@ -29,7 +29,8 @@
     --c-syria:#c42e6b;      /* raspberry    */
     --c-haredi:#1c8aa8;     /* teal         */
     --c-emirati:#4e9a3d;    /* green        */
-    --c-site:#3a352e;       /* neutral outline for field-site countries */
+    --c-jerusalem:#2f6db0;  /* blue — Israel + Palestine outline */
+    --c-site:#3a352e;       /* neutral outline for other field-site countries */
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
@@ -220,9 +221,10 @@ function labelMarker(p){
 /* ============================================================
    FIELD-SITE COUNTRIES (always-on layer)
    ============================================================ */
+const SITE_COLORS={ jerusalem:getCss('--c-jerusalem'), uae:getCss('--c-emirati') };
 const siteLayer=L.layerGroup();
 SITE_KEYS.forEach(k=>{
-  const o=countryOutline(k,getCss('--c-site'),true);
+  const o=countryOutline(k, SITE_COLORS[k]||getCss('--c-site'), true);
   if(o) o.addTo(siteLayer);
   labelMarker(PLACES[k]).addTo(siteLayer);
 });
