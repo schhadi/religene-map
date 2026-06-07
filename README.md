@@ -4,9 +4,10 @@ An interactive [Leaflet](https://leafletjs.com) map of the RELI-GENE project's f
 transnational diaspora/kinship networks. Everything lives in one file: **`index.html`**
 (no build step, no API key, no account).
 
-- **Field sites:** Jerusalem · Germany · Sweden · UAE · London · New York
+- **Field sites:** Jerusalem · Germany · Sweden · UAE · London · New York — shown as **country outlines**
 - **Migration flows (arrowheads):** Palestinian, Iraqi & Syrian diaspora → Germany & Sweden
 - **Kinship networks (dotted, bidirectional):** Jerusalem · London · New York · and UAE · UK
+- **Hover** any country or flow line to read its details (no clicking, no sidebar).
 
 ---
 
@@ -15,9 +16,12 @@ transnational diaspora/kinship networks. Everything lives in one file: **`index.
 Open `index.html` and edit the two blocks near the top of the `<script>` — nothing else needs touching.
 
 - **`PLACES`** — add or move a location. Each entry is `key: { ll:[lat,lng], name, type, note }`.
-  The `note` is what shows in the detail sidebar.
+  `ll` anchors the place label and its flow lines; the `note` is what shows when you hover the place.
 - **`GROUPS`** — add or change a flow. Each entry lists its `edges` (`[fromKey, toKey]` pairs),
   a `raw` colour, and `directed: true` (migration, gets an arrowhead) or `false` (kinship, dotted both ways).
+- **`COUNTRIES`** — the embedded country-outline shapes (Natural Earth, simplified; `jerusalem` is
+  Israel + Palestine merged into one outline). A new `PLACES` key with no matching `COUNTRIES` entry
+  still works — it just draws a label and flow lines, with no outline.
 
 Example — change Germany's anchor city to Berlin→Cologne, or add a new flow:
 ```js
