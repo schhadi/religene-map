@@ -54,9 +54,19 @@
   .legend{
     background:rgba(249,249,249,.94);border:1px solid var(--line);border-radius:10px;
     padding:11px 13px;box-shadow:0 2px 12px rgba(0,0,0,.10);backdrop-filter:blur(2px);
-    font:13px "Inter",system-ui,sans-serif;color:var(--ink);min-width:212px;
+    font:13px "Inter",system-ui,sans-serif;color:var(--ink);width:236px;max-width:84vw;
   }
-  .legend h4{margin:0 0 8px;font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:700}
+  /* collapsible header */
+  .legend .hd{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;user-select:none}
+  .legend h4{margin:0;font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:700}
+  .legend .chev{flex:0 0 auto;width:16px;height:16px;border:0;background:transparent;color:var(--muted);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;transition:transform .25s ease;padding:0}
+  .legend .chev svg{width:12px;height:12px}
+  .legend .body{margin-top:8px;overflow:hidden}
+  /* collapsed state: hide body, rotate chevron, shrink to a neat pill */
+  .legend.collapsed{width:auto;min-width:0}
+  .legend.collapsed .body{display:none}
+  .legend.collapsed .chev{transform:rotate(-90deg)}
   .legend .row{display:flex;align-items:center;gap:9px;margin:6px 0;cursor:pointer;user-select:none}
   .legend input{margin:0;cursor:pointer;accent-color:var(--brand)}
   .legend .swatch{width:24px;height:0;border-top-width:3px;border-top-style:solid;border-radius:2px;flex:0 0 auto}
@@ -104,11 +114,13 @@
     .leaflet-pane path,.leaflet-marker-icon{transition:none} }
 
   @media(max-width:720px){
-    #brand{max-width:55vw;padding:8px 11px}
+    #brand{max-width:58vw;padding:8px 11px}
     #brand .name{font-size:16px}
     #brand .tag{display:none}              /* compact wordmark only */
-    .legend{min-width:0;padding:8px 10px;font-size:11.5px}
+    .legend{min-width:0;max-width:72vw;padding:8px 10px;font-size:11.5px}
+    .legend .body{max-height:54vh;overflow-y:auto}   /* scroll instead of overflowing the map */
     .legend .lbl{font-size:11px}
+    .legend .row{margin:8px 0}              /* bigger tap targets */
     .legend .hint{display:none}
     .leaflet-tooltip.rg-tip{width:200px;padding:9px 11px}
     .rg-tip .ttl{font-size:16px}
@@ -289,19 +301,36 @@ GROUPS.forEach(g=>{
 const legend = L.control({position:'topright'});
 legend.onAdd = function(){
   const div = L.DomUtil.create('div','legend');
+  const chevSvg = `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   div.innerHTML =
-    `<h4>Layers</h4>`+
-    `<label class="row"><input type="checkbox" id="t-sites" checked>`+
-      `<span class="swatch area"></span>`+
-      `<span class="lbl">Field sites<small>Country outlines</small></span></label>`+
-    GROUPS.map(g=>`<label class="row">`+
-      `<input type="checkbox" class="t-link" data-key="${g.key}" checked>`+
-      `<span class="swatch${g.directed?'':' dashed'}" style="border-top-color:${g.raw}"></span>`+
-      `<span class="lbl">${g.label}<small>${g.directed?'Migration flow (directional)':'Kinship network (bidirectional)'}</small></span>`+
-    `</label>`).join('')+
-    `<p class="hint"><b>Hover</b> for details · <b>click a country</b> to isolate its connections. Arrowheads show migration direction; dotted lines are bidirectional kinship ties.</p>`;
+    `<div class="hd" id="legend-hd" role="button" tabindex="0" aria-expanded="true" aria-controls="legend-body">`+
+      `<h4>Layers</h4>`+
+      `<button type="button" class="chev" aria-label="Collapse layers panel">${chevSvg}</button>`+
+    `</div>`+
+    `<div class="body" id="legend-body">`+
+      `<label class="row"><input type="checkbox" id="t-sites" checked>`+
+        `<span class="swatch area"></span>`+
+        `<span class="lbl">Field sites<small>Country outlines</small></span></label>`+
+      GROUPS.map(g=>`<label class="row">`+
+        `<input type="checkbox" class="t-link" data-key="${g.key}" checked>`+
+        `<span class="swatch${g.directed?'':' dashed'}" style="border-top-color:${g.raw}"></span>`+
+        `<span class="lbl">${g.label}<small>${g.directed?'Migration flow (directional)':'Kinship network (bidirectional)'}</small></span>`+
+      `</label>`).join('')+
+      `<p class="hint"><b>Hover</b> for details · <b>click a country</b> to isolate its connections. Arrowheads show migration direction; dotted lines are bidirectional kinship ties.</p>`+
+    `</div>`;
   L.DomEvent.disableClickPropagation(div);
   L.DomEvent.disableScrollPropagation(div);
+  // collapse / expand
+  const hd = div.querySelector('#legend-hd');
+  const toggle = ()=>{
+    const collapsed = div.classList.toggle('collapsed');
+    hd.setAttribute('aria-expanded', String(!collapsed));
+    div.querySelector('.chev').setAttribute('aria-label', collapsed?'Expand layers panel':'Collapse layers panel');
+  };
+  L.DomEvent.on(hd,'click',toggle);
+  L.DomEvent.on(hd,'keydown',e=>{ if(e.key==='Enter'||e.key===' '){ L.DomEvent.preventDefault(e); toggle(); } });
+  // start collapsed by default — user pops it open when needed
+  div.classList.add('collapsed'); hd.setAttribute('aria-expanded','false');
   return div;
 };
 legend.addTo(map);
