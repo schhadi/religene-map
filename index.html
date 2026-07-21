@@ -81,6 +81,11 @@
     background:rgba(249,249,249,.82);border:1px solid var(--line);border-radius:5px;
     padding:1px 7px;font:600 11px "Inter";white-space:nowrap;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08);
   }
+  /* when the adaptive fit lands far out (small screens), shrink the labels
+     so they don't dwarf — or cover — the countries they name */
+  .zoomed-out .site-label{font-size:9.5px;padding:0 5px}
+  /* label sits left of its anchor — for places at the map's east edge */
+  .site-label.lbl-left{transform:translateX(calc(-100% - 16px))}
 
   /* ---------- HOVER TOOLTIP CARD ---------- */
   .leaflet-tooltip.rg-tip{
@@ -124,6 +129,14 @@
     .legend .hint{display:none}
     .leaflet-tooltip.rg-tip{width:200px;padding:9px 11px}
     .rg-tip .ttl{font-size:16px}
+    #showall{left:10px;bottom:18px;padding:8px 13px}
+  }
+  /* short viewports (landscape phones): the full brand card would eat
+     a third of the map height — compact wordmark there too */
+  @media(max-height:520px){
+    #brand{max-width:44vw;padding:8px 11px}
+    #brand .name{font-size:16px}
+    #brand .tag{display:none}
   }
 </style>
 </head>
@@ -148,8 +161,8 @@ const COUNTRIES = {"jerusalem":{"type":"Polygon","coordinates":[[[34.53,30.446],
 /* ============================================================
    BASE MAP — label-free tiles; we add our own place labels only
    ============================================================ */
-const map = L.map('map',{zoomControl:true,scrollWheelZoom:true,minZoom:2})
-  .setView([43,10],3.3);
+const map = L.map('map',{zoomControl:true,scrollWheelZoom:true,minZoom:1.5,zoomSnap:0.25})
+  .setView([43,10],3);   /* provisional — homeView() below fits the view to the screen */
 map.zoomControl.setPosition('bottomright');
 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',
   {attribution:'&copy; OpenStreetMap, &copy; CARTO',subdomains:'abcd',maxZoom:19}).addTo(map);
@@ -164,14 +177,14 @@ function getCss(v){return getComputedStyle(document.documentElement).getProperty
    DATA
    ============================================================ */
 const PLACES = {
-  jerusalem:{ll:[31.7683,35.2137],name:'Jerusalem',type:'Field site',note:'Major hub for Palestinian communities of diverse ethno-religious backgrounds and for Haredi networks of kinship, reproductive screening and fertility treatment.'},
+  jerusalem:{ll:[31.7683,35.2137],name:'Jerusalem',type:'Field site',lbl:[-8,-4],note:'Major hub for Palestinian communities of diverse ethno-religious backgrounds and for Haredi networks of kinship, reproductive screening and fertility treatment.'},
   germany:  {ll:[52.5200,13.4050],name:'Germany',  type:'Field site',note:'A major European hub for Palestinian, Syrian and Iraqi diaspora families — shaped by migration, asylum and family-reunification pathways, with enduring cross-border kinship ties.'},
   sweden:   {ll:[59.3293,18.0686],name:'Sweden',   type:'Field site',note:'A major European hub for Palestinian, Syrian and Iraqi diaspora communities — shaped by migration, asylum and family-reunification pathways, with enduring cross-border kinship ties.'},
-  uae:      {ll:[24.4539,54.3773],name:'UAE',       type:'Field site',note:'Major hub for premarital genetic screening and fertility treatment in the Gulf.'},
+  uae:      {ll:[24.4539,54.3773],name:'UAE',       type:'Field site',side:'left',note:'Major hub for premarital genetic screening and fertility treatment in the Gulf.'},
   london:   {ll:[51.5074,-0.1278],name:'London',    type:'Field site',note:'Project based at SOAS; London is a hub for transnational kinship networks among close-knit ethno-religious communities.'},
   newyork:  {ll:[40.7128,-74.0060],name:'New York', type:'Field site',note:'A major hub in transnational Haredi kinship networks.'},
   iraq:     {ll:[33.3152,44.3661],name:'Iraq',      type:'Origin',    note:'War, persecution and forced displacement of Iraqis from diverse ethno-religious backgrounds.'},
-  syria:    {ll:[33.5138,36.2765],name:'Syria',     type:'Origin',    note:'War, persecution and forced displacement of Syrians from diverse ethno-religious backgrounds.'},
+  syria:    {ll:[33.5138,36.2765],name:'Syria',     type:'Origin',    lbl:[-8,26],note:'War, persecution and forced displacement of Syrians from diverse ethno-religious backgrounds.'},
 };
 const SITE_KEYS = ['jerusalem','germany','sweden','uae','london','newyork'];
 
@@ -240,19 +253,20 @@ function countryOutline(k,color,isSite){
   });
 }
 
-/* always-on text label at the city anchor (no dot) */
+/* always-on text label at the city anchor (no dot); `lbl` overrides the
+   anchor so labels in the dense Levant cluster don't sit on each other */
 function labelMarker(p){
   return L.marker(p.ll,{interactive:false,icon:L.divIcon({className:'',
-    html:`<div class="site-label">${p.name}</div>`,iconAnchor:[-8,8]})});
+    html:`<div class="site-label${p.side==='left'?' lbl-left':''}">${p.name}</div>`,
+    iconAnchor:p.lbl||[-8,8]})});
 }
 
 /* ============================================================
    FIELD-SITE COUNTRIES (always-on layer)
    ============================================================ */
 /* registries used by the click-to-isolate focus mode */
-const DEFAULT_CENTER=[43,10], DEFAULT_ZOOM=3.3;
 const outlineByKey={}, labelByKey={}, edges=[], groupEnabled={};
-let currentFocus=null;
+let currentFocus=null, focusBounds=null;
 
 const SITE_COLORS={ jerusalem:getCss('--c-jerusalem'), uae:getCss('--c-emirati') };
 const siteLayer=L.layerGroup();
@@ -293,6 +307,68 @@ GROUPS.forEach(g=>{
   });
   lg.addTo(map);
   groupLayers[g.key]=lg;
+});
+
+/* ============================================================
+   ADAPTIVE VIEW — fit the whole network to whatever screen or
+   iframe the map lives in, instead of a fixed desktop view
+   ============================================================ */
+const HOME_BOUNDS=(()=>{
+  const b=L.latLngBounds([]);
+  Object.values(PLACES).forEach(p=>b.extend(p.ll));
+  edges.forEach(e=>{ try{ b.extend(e.lines[0].getBounds()); }catch(_){} });
+  for(const k in outlineByKey){   // country outlines, except the USA — fitting
+    if(k==='newyork') continue;   // the lower-48 would shrink Europe to a sliver
+    try{ b.extend(outlineByKey[k].getBounds()); }catch(_){}
+  }
+  return b;
+})();
+
+/* fit padding that clears the brand card + map controls at any size */
+function viewPad(){
+  const brand=document.getElementById('brand');
+  const top=(brand ? brand.offsetTop+brand.offsetHeight : 0)+12;
+  const side=Math.max(18,Math.min(44,Math.round(innerWidth*0.03)));
+  return {paddingTopLeft:[side,top],paddingBottomRight:[side,48]};
+}
+
+/* never let the world get smaller than the viewport height — zooming out
+   past that point shows grey void bands beyond the poles */
+function fitMinZoom(){
+  const h=map.getSize().y;
+  map.setMinZoom(Math.max(1.5, Math.ceil(Math.log2(Math.max(256,h)/256)/0.25)*0.25));
+}
+
+/* `userNav` = the user panned/zoomed themselves; auto refits then back off */
+let userNav=false, autoNav=false;
+map.on('dragend',()=>{ userNav=true; });
+map.on('zoomend',()=>{ if(!autoNav) userNav=true; });
+map.on('moveend',()=>{ autoNav=false; });
+
+function homeView(animate){
+  autoNav=true; userNav=false;
+  if(animate) map.flyToBounds(HOME_BOUNDS,{...viewPad(),duration:.8});
+  else map.fitBounds(HOME_BOUNDS,{...viewPad(),animate:false});
+}
+
+/* compact place labels when the fit lands far out (small screens) */
+function zoomClass(){ map.getContainer().classList.toggle('zoomed-out', map.getZoom()<2.6); }
+map.on('zoomend',zoomClass);
+
+/* refit on rotation / resize; ignore mobile URL-bar show/hide jitter */
+let rsTimer, lastW=innerWidth, lastH=innerHeight;
+addEventListener('resize',()=>{
+  clearTimeout(rsTimer);
+  rsTimer=setTimeout(()=>{
+    const dw=Math.abs(innerWidth-lastW), dh=Math.abs(innerHeight-lastH);
+    if(dw<24 && dh<120) return;
+    lastW=innerWidth; lastH=innerHeight;
+    fitMinZoom();
+    if(currentFocus && focusBounds && focusBounds.isValid()){
+      autoNav=true;
+      map.fitBounds(focusBounds,{...viewPad(),animate:false,maxZoom:6});
+    } else if(!userNav){ homeView(false); }
+  },180);
 });
 
 /* ============================================================
@@ -397,10 +473,13 @@ function focusPlace(k){
       if(o&&map.hasLayer(o)){ try{ b.extend(o.getBounds()); }catch(_){} }
       b.extend(PLACES[key].ll); });
     rel.forEach(e=>{ try{ b.extend(e.lines[0].getBounds()); }catch(_){} });
-    if(b.isValid()) map.flyToBounds(b,{paddingTopLeft:[40,135],paddingBottomRight:[40,55],duration:.9,maxZoom:6});
+    focusBounds=b;
+    if(b.isValid()){ autoNav=true; userNav=false;
+      map.flyToBounds(b,{...viewPad(),duration:.9,maxZoom:6}); }
     showAllBtn.style.display='inline-flex';
   } else {
-    map.flyTo(DEFAULT_CENTER,DEFAULT_ZOOM,{duration:.8});
+    focusBounds=null;
+    homeView(true);
     showAllBtn.style.display='none';
   }
 }
@@ -414,7 +493,13 @@ map.on('click',()=>{ if(!_eat) clearFocus(); });
 showAllBtn.addEventListener('click',clearFocus);
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') clearFocus(); });
 
-applyFx();   // initial paint: adds the arrowheads for enabled groups
+applyFx();       // initial paint: adds the arrowheads for enabled groups
+fitMinZoom();
+homeView(false); // initial view: fit the whole network to this screen
+zoomClass();
+/* web fonts can re-wrap the brand card after load — refit with the true padding */
+if(document.fonts && document.fonts.ready)
+  document.fonts.ready.then(()=>{ if(!userNav && !currentFocus) homeView(false); });
 </script>
 </body>
 </html>
