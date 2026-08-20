@@ -53,3 +53,41 @@ Adjust `height` to taste. That's it — the live, clickable map appears inside t
 **Live & interactive (recommended):** with the page hosted (see above):
 **Insert → Get Add-ins → search "Web Viewer" → Insert →** paste your URL.
 The animated, clickable map runs right inside the slide.
+
+---
+
+## Put it in Prezi (or anywhere an iframe won't go)
+
+Prezi, printed handouts and locked-down slide templates can't host a live map, so
+`presentation/` holds ready-made pictures of it — **4800 × 2700 px PNG** (16:9, drop straight
+onto a slide) and a **vector PDF** (stays sharp at any size, for print or PowerPoint):
+
+| File | What it is | Use it for |
+| --- | --- | --- |
+| `religene-map-poster.png` / `.pdf` | The whole map **plus every hover note** written out underneath — field sites, origins of displacement, all five networks | A slide that has to explain itself. In Prezi, zoom into the cards to walk through one site at a time |
+| `religene-map-slide.png` / `.pdf` | Same map, big and clean, legend along the foot, no paragraphs | A backdrop to talk over |
+
+**In Prezi:** *Insert → Image → Upload* and pick the PNG. Prezi is zoomable, so the poster
+works well as one full-canvas image you fly into — put the topic markers over the countries.
+
+### Redraw them after editing the map
+
+The pictures are generated from `index.html` itself, so change `PLACES` / `GROUPS` there and
+re-run this — the labels, arrows, legend and notes all follow:
+
+```bash
+cd presentation
+npm install          # d3-geo + playwright (once)
+npx playwright install chromium
+npm run build        # rewrites the PNGs and PDFs
+```
+
+- `build-poster.mjs` — reads `PLACES`, `GROUPS`, `COUNTRIES` and the brand colours straight out
+  of `index.html`, projects the same curved arcs onto a Mercator base map, and shoots the
+  result in a headless browser. Layout, label nudges and image scale live in the constants at
+  the top (`LAYOUTS`, `LABEL_NUDGE`, `SCALE`).
+- `basemap.json` — Natural Earth country outlines, clipped to the poster window
+  (rebuild with `build-basemap.mjs` only if that window moves).
+- `fonts.css` — the brand faces, inlined so the render never depends on the network.
+
+Need a different size? `SCALE=4 npm run build` gives 7680 × 4320; `SCALE=1` gives 1920 × 1080.
